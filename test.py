@@ -6,6 +6,7 @@ import networks
 import utils
 import time
 from sklearn.metrics.pairwise import cosine_similarity
+from sklearn import preprocessing
 
 #################################
 #################################
@@ -42,15 +43,21 @@ learning_rate = tf.train.exponential_decay(starter_learning_rate, global_step,
 print('Loading processed data...')
 start = time.time()
 
-data_imgs = data.load_imgs('img_features.p')
-data_text = data.load_text('pascal/train.mat')
-labels_text = labels_imgs = data.load_labels('VOCdevkit/VOC2007/ImageSets/Main',5011,20)
+data_imgs = data.load_imgs('img_features_test.p')
+data_text = np.array(data.load_text('pascal/test.mat'))
+labels_text = labels_imgs = data.load_labels_test('VOCTest/VOCdevkit/VOC2007/ImageSets/Main',4952,20)
+
+valid_idx = (np.sum(data_text,axis=1) != np.zeros(data_text.shape[0]))
+
+data_imgs=(data_imgs[valid_idx])
+data_text=preprocessing.scale(data_text[valid_idx])
+labels_text=labels_imgs=labels_text[valid_idx]
 
 IMG_SIZE = len(data_imgs[0])
 TEXT_SIZE = len(data_text[0])
 LABEL_SIZE = len(labels_text[0])
 
-data = list(data_imgs)+ data_text
+data = list(data_imgs)+ list(data_text)
 labels = list(labels_imgs)+ list(labels_text)
 
 idx_imgs = [i for i in range(len(data_imgs))]
@@ -84,14 +91,16 @@ saver.restore(sess,"checkpoints/model.ckpt")
 
 imgs_latent, text_latent = sess.run([imgs_encoded,text_encoded],feed_dict={imgs_placeholder:data_imgs,text_placeholder:data_text})
 
-similarities = cosine_similarities([imgs_latent,text_latent])
+similarities = cosine_similarity(imgs_latent,text_latent)
 
 hits = 0
-K = 5
-for i in similarities:
+K = 50
+for i in range(len(similarities)):
     top_K_matches=np.argsort(similarities[i,:])[-K:]
     for k in top_K_matches:
-        if len([True for label1,label2 in zip(labels_imgs[i],labels_text[k]) if label1==label2]):
+        if len([True for label1,label2 in zip(labels_imgs[i],labels_text[k]) if (label1) and (label2)]):
             hits += 1
 
 precision = hits/(len(similarities)*K)
+
+print(utils.meanAveragePrecision(imgs_latent,text_latent,labels_imgs,labels_text,4000))

@@ -2,13 +2,10 @@ import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 
 def semanticGraph(data,labels):
-    n=len(data)
-    adjacency = np.zeros((n,n))
-    labels = np.array(labels)
-    for i in range(n):
-        adjacency[i:,i] = cosine_similarity([labels[i]],labels[i:])
-        adjacency[i,i:] = adjacency[i:,i]
-        adjacency[i,i] = 0
+
+    adjacency = cosine_similarity(labels,labels)
+
+    np.fill_diagonal(adjacency,0)
 
     return adjacency
 
@@ -21,7 +18,7 @@ def structureGraph(data,k=5):
     distances = [[np.linalg.norm(v1-v2) for v1 in data] for v2 in data]
 
     for i in range(n):
-        k_nearest_neighbors = np.argsort(distances[i])[-k-1:-1]
+        k_nearest_neighbors = np.argsort(distances[i])[1:k+1]
         for j in k_nearest_neighbors:
             adjacency[i,j] = 1
 #        adjacency[i,:] = [1 if j in k_nearest_neighbors else 0 for j in range(n)]
@@ -74,7 +71,7 @@ def sampleStructureNegative(adjacency,k):
     neighbors = []
     for i in range(n):
         disconnected = [j for j in range(n) if adjacency[i,j] == 0.]
-        neighbors.append([np.random.choice(disconnected)])
+        neighbors.append([np.random.choice(disconnected) for _ in range(k)])
 
     return neighbors
 
@@ -84,7 +81,7 @@ def sampleSemanticNegative(adjacency,k,indexes_sample,indexes_neighbors):
     neighbors = []
     for i in range(n):
         disconnected = [j for j in range(n) if adjacency[i,j] == 0.]
-        neighbors.append([np.random.choice(disconnected)])
+        neighbors.append([np.random.choice(disconnected) for _ in range(k)])
 
     return neighbors
 

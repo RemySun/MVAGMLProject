@@ -25,5 +25,18 @@ def load_labels(directory,n_samples,n_labels):
                 labels[sample_names[int(sample)],i]=1
     return labels
 
+def load_labels_test(directory,n_samples,n_labels):
+    filenames =  glob.glob(directory+"/*_test.txt")
+    sample_names = {}
+    for i,filename in enumerate(glob.glob("VOCTest/VOCdevkit/VOC2007/JPEGImages/*")):
+        sample_names.update({int(filename.split('/')[-1].split('.')[0]):i})
+    labels = np.zeros((n_samples,n_labels))
+    for i,filename in enumerate(filenames):
+        raw_data = np.genfromtxt(filename)
+        for sample, ground_truth in raw_data:
+            if ground_truth == 1:
+                labels[sample_names[int(sample)],i]=1
+    return labels
+
 def load_imgs(path):
     return pickle.load(open(path,'rb'))

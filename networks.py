@@ -30,6 +30,6 @@ def make_decoder(x,n_input=32,n_out=20,name='decoder',reuse=False):
         }
 
 
-    layer_1 = (tf.add(tfb.matmul(x, weights['out']), biases['b_out']))
+    out_layer = (tf.add(tf.matmul(x, weights['out']), biases['b_out']))
 
     return out_layer
