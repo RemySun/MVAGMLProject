@@ -8,29 +8,7 @@ import time
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn import preprocessing
 
-#################################
-#################################
-#####                       #####
-#####    Hyperparameters    #####
-#####                       #####
-#################################
-#################################
-
-k_nearest_imgs = 100
-k_nearest_text = 100
-
-nb_iterations = 20
-
-batch_size = 10
-
-alpha_global=0.1
-alpha_structure=0.1
-
-global_step = tf.Variable(0, trainable=False)
-starter_learning_rate = 0.01
-learning_rate = tf.train.exponential_decay(starter_learning_rate, global_step,
-                                           2000, 0.95, staircase=True)
-
+args = utils.getParsedArgs()
 
 ########################################
 ########################################
@@ -39,29 +17,28 @@ learning_rate = tf.train.exponential_decay(starter_learning_rate, global_step,
 #####                              #####
 ########################################
 ########################################
-
+print('new and improved testing')
 print('Loading processed data...')
 start = time.time()
 
-data_imgs = data.load_imgs('img_features_test.p')
+data_imgs = data.load_imgs('VOC_alexnet_feat_test.p')
 data_text = np.array(data.load_text('pascal/test.mat'))
 labels_text = labels_imgs = data.load_labels_test('VOCTest/VOCdevkit/VOC2007/ImageSets/Main',4952,20)
 
+# data_imgs = data.load_imgs('img_features.p')
+# data_text = np.array(data.load_text('pascal/train.mat'))
+# labels_text = labels_imgs = data.load_labels('VOCdevkit/VOC2007/ImageSets/Main',5011,20)
+
+
 valid_idx = (np.sum(data_text,axis=1) != np.zeros(data_text.shape[0]))
 
-data_imgs=(data_imgs[valid_idx])
+data_imgs=preprocessing.scale(data_imgs[valid_idx])
 data_text=preprocessing.scale(data_text[valid_idx])
 labels_text=labels_imgs=labels_text[valid_idx]
 
 IMG_SIZE = len(data_imgs[0])
 TEXT_SIZE = len(data_text[0])
 LABEL_SIZE = len(labels_text[0])
-
-data = list(data_imgs)+ list(data_text)
-labels = list(labels_imgs)+ list(labels_text)
-
-idx_imgs = [i for i in range(len(data_imgs))]
-idx_text = [len(data_imgs)+i for i in range(len(data_text))]
 
 print("Finished loading preprocessed data, it took ", time.time()-start)
 start = time.time()
@@ -93,14 +70,37 @@ imgs_latent, text_latent = sess.run([imgs_encoded,text_encoded],feed_dict={imgs_
 
 similarities = cosine_similarity(imgs_latent,text_latent)
 
-hits = 0
-K = 50
-for i in range(len(similarities)):
-    top_K_matches=np.argsort(similarities[i,:])[-K:]
-    for k in top_K_matches:
-        if len([True for label1,label2 in zip(labels_imgs[i],labels_text[k]) if (label1) and (label2)]):
-            hits += 1
+# hits = 0
+# K = 200
+# for i in range(len(similarities)):
+#     top_K_matches=np.argsort(-similarities[i,:])[:K]
+#     for k in top_K_matches:
+#         if len([True for label1,label2 in zip(labels_imgs[i],labels_text[k]) if (label1) and (label2)]):
+#             hits += 1
 
-precision = hits/(len(similarities)*K)
+# precision_it = hits/(len(similarities)*K)
 
-print(utils.meanAveragePrecision(imgs_latent,text_latent,labels_imgs,labels_text,4000))
+# similarities = cosine_similarity(text_latent,imgs_latent)
+
+# hits = 0
+# K = 200
+# for i in range(len(similarities)):
+#     top_K_matches=np.argsort(-similarities[i,:])[:K]
+#     for k in top_K_matches:
+#         if len([True for label1,label2 in zip(labels_text[i],labels_imgs[k]) if (label1) and (label2)]):
+#             hits += 1
+
+# precision_ti = hits/(len(similarities)*K)
+
+#hits_mat =(utils.meanAveragePrecision(imgs_latent,text_latent,labels_imgs,labels_text,200))
+print(utils.meanAveragePrecision(imgs_latent,text_latent,labels_imgs,labels_text,len(imgs_latent)))
+print(utils.meanAveragePrecision(text_latent,imgs_latent,labels_text,labels_imgs,len(imgs_latent)))
+
+for k in [1,5,10]:
+    print('Recall at',k)
+    print(utils.recallAtK(imgs_latent,text_latent,labels_imgs,labels_text,k))
+    print(utils.recallAtK(text_latent,imgs_latent,labels_text,labels_imgs,k))
+
+print('median rank is')
+print(utils.medR(text_latent,imgs_latent,labels_text,labels_imgs,500))
+

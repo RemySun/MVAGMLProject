@@ -6,39 +6,12 @@ import networks
 import utils
 import time
 from sklearn import preprocessing
+from sklearn.metrics.pairwise import euclidean_distances
 
-#################################
-#################################
-#####                       #####
-#####    Hyperparameters    #####
-#####                       #####
-#################################
-#################################
-
-times_sampled=1
-
-structure_context_size = 8*times_sampled
-structure_negative_context_size = 8*times_sampled
-
-same_semantic_context_size = 2*times_sampled
-other_semantic_context_size = 6*times_sampled
-
-same_semantic_negative_context_size = 2*times_sampled
-other_semantic_negative_context_size = 6*times_sampled
-
-k_nearest_imgs = 8
-k_nearest_text = 8
-
-nb_iterations = 10
-
-batch_size = 5
-
-alpha_global=0.
-alpha_structure=0.
+args = utils.getParsedArgs()
 
 global_step = tf.Variable(0, trainable=False)
-starter_learning_rate = 0.01
-learning_rate = tf.train.exponential_decay(starter_learning_rate, global_step,
+learning_rate = tf.train.exponential_decay(args.starter_learning_rate, global_step,
                                            2000, 0.95, staircase=True)
 
 
@@ -53,13 +26,13 @@ learning_rate = tf.train.exponential_decay(starter_learning_rate, global_step,
 print('Loading processed data...')
 start = time.time()
 
-data_imgs = data.load_imgs('img_features.p')
+data_imgs = data.load_imgs('VOC_alexnet_feat.p')
 data_text = np.array(data.load_text('pascal/train.mat'))
 labels_text = labels_imgs = data.load_labels('VOCdevkit/VOC2007/ImageSets/Main',5011,20)
 
 valid_idx = (np.sum(data_text,axis=1) != np.zeros(data_text.shape[0]))
 
-data_imgs=(data_imgs[valid_idx])
+data_imgs=preprocessing.scale(data_imgs[valid_idx])
 data_text=preprocessing.scale(data_text[valid_idx])
 labels_text=labels_imgs=labels_text[valid_idx]
 
@@ -78,9 +51,9 @@ start = time.time()
 
 adjacency_semantic = graphs.semanticGraph(data, labels)
 
-adjacency_structure_imgs = graphs.structureGraph(data_imgs, k=k_nearest_imgs)
+adjacency_structure_imgs = graphs.structureGraph(data_imgs, k=args.k_nearest)
 
-adjacency_structure_text = graphs.structureGraph(data_text, k=k_nearest_text)
+adjacency_structure_text = graphs.structureGraph(data_text, k=args.k_nearest)
 
 print("Finished building data graphs, it took ", time.time()-start)
 
@@ -95,8 +68,8 @@ print("Finished building data graphs, it took ", time.time()-start)
 print("Creating the network and loss graphs...")
 start = time.time()
 
-imgs_placeholder = tf.placeholder(tf.float32,shape=[batch_size,IMG_SIZE])
-text_placeholder = tf.placeholder(tf.float32,shape=[batch_size,TEXT_SIZE])
+imgs_placeholder = tf.placeholder(tf.float32,shape=[args.batch_size,IMG_SIZE])
+text_placeholder = tf.placeholder(tf.float32,shape=[args.batch_size,TEXT_SIZE])
 
 imgs_encoded = networks.make_encoder(imgs_placeholder,name='imgs_encoder',n_input=IMG_SIZE)
 text_encoded = networks.make_encoder(text_placeholder,name='text_encoder',n_input=TEXT_SIZE)
@@ -108,8 +81,8 @@ text_encoded = networks.make_encoder(text_placeholder,name='text_encoder',n_inpu
 imgs_labels_placeholder = tf.placeholder(tf.float32,shape=[None,LABEL_SIZE])
 text_labels_placeholder = tf.placeholder(tf.float32,shape=[None,LABEL_SIZE])
 
-imgs_decoded = networks.make_decoder(imgs_encoded)
-text_decoded = networks.make_decoder(text_encoded,reuse=True)
+imgs_decoded = (networks.make_decoder(imgs_encoded))
+text_decoded = (networks.make_decoder(text_encoded,reuse=True))
 
 global_semantic_loss = (tf.reduce_sum(tf.square(imgs_decoded-imgs_labels_placeholder))
                         + tf.reduce_sum(tf.square(text_decoded-text_labels_placeholder)))
@@ -155,8 +128,8 @@ context_encodings = [
 ]
 
 context_sizes = [
-    [same_semantic_context_size,other_semantic_context_size,structure_context_size],
-    [same_semantic_negative_context_size,other_semantic_negative_context_size,structure_negative_context_size]
+    [args.same_semantic_context_size,args.other_semantic_context_size,args.structure_context_size],
+    [args.same_semantic_negative_context_size,args.other_semantic_negative_context_size,args.structure_negative_context_size]
 ]
 
 input_encodings = [
@@ -165,26 +138,26 @@ input_encodings = [
 ]
 
 context_signs = [1,-1]
-context_alphas = [1,1,alpha_structure]
+context_alphas = [args.alpha_semantic,args.alpha_semantic,args.alpha_structure]
 losses_skip = [
     [
-       tf.reduce_sum(-context_alphas[j]*tf.log(tf.sigmoid(context_signs[i//2]*tf.reduce_sum(tf.multiply(utils.tf_repeat(input_encodings[i%2],context_sizes[i//2][j]),context_encodings[i][j]),axis=1)))) for j in range(3)
+       -context_alphas[j]*tf.reduce_sum(tf.log(tf.sigmoid(context_signs[i//2]*tf.reduce_sum(tf.multiply(utils.tf_repeat(input_encodings[i%2],context_sizes[i//2][j]),context_encodings[i][j]),axis=1)))) for j in range(3)
     ] for i in range(4)
 ]
 
 loss_skip = tf.zeros([1])
 for losses in losses_skip:
     for loss in losses:
-        loss_skip = tf.add(loss_skip,loss)
+        loss_skip += loss
 
 
-loss = alpha_global * global_semantic_loss + loss_skip
+loss = args.alpha_global * global_semantic_loss + loss_skip
 
 weights = tf.trainable_variables()[1:11]
 weight_decay_l2 = tf.zeros([1])
 for w in weights:
     weight_decay_l2 += tf.reduce_sum(tf.square(w))
-weight_decay_op = tf.train.GradientDescentOptimizer(0.001).minimize(weight_decay_l2)
+weight_decay_op = tf.train.GradientDescentOptimizer(0.00005).minimize(weight_decay_l2)
 
 update_loss = tf.train.MomentumOptimizer(learning_rate,0.9).minimize(loss,global_step=global_step)
 
@@ -208,55 +181,76 @@ sess.run(init_op)
 
 print("Starting training...")
 
-order_imgs = np.array([i for i in range(len(data_imgs))])
-order_text = np.array([i for i in range(len(data_text))])
+order_imgs = np.array([i for i in range(len(data_imgs)*5)])
+order_text = np.array([i for i in range(len(data_text)*5)])
 
-for iteration in range(nb_iterations):
 
-    print("Starting iteration",iteration)
+contexts_tot = np.array([[
+            [
+                graphs.sampleSemanticNeighborhoodSame(adjacency_semantic,args.same_semantic_context_size,idx_imgs),
+                graphs.sampleSemanticNeighborhoodOther(adjacency_semantic,args.other_semantic_context_size,idx_imgs),
+                graphs.sampleStructureNeighborhood(adjacency_structure_imgs,args.structure_context_size)
+            ],
+            [
+                graphs.sampleSemanticNeighborhoodSame(adjacency_semantic,args.same_semantic_context_size,idx_text),
+                graphs.sampleSemanticNeighborhoodOther(adjacency_semantic,args.other_semantic_context_size,idx_text),
+                graphs.sampleStructureNeighborhood(adjacency_structure_text,args.structure_context_size)
+            ],
+            [
+                graphs.sampleSemanticNegativeSame(adjacency_semantic,args.same_semantic_negative_context_size,idx_imgs),
+                graphs.sampleSemanticNegativeOther(adjacency_semantic,args.other_semantic_negative_context_size,idx_imgs),
+                graphs.sampleStructureNegative(adjacency_structure_imgs,args.structure_negative_context_size)
+            ],
+            [
+                graphs.sampleSemanticNegativeSame(adjacency_semantic,args.same_semantic_negative_context_size,idx_text),
+                graphs.sampleSemanticNegativeOther(adjacency_semantic,args.other_semantic_negative_context_size,idx_text),
+                graphs.sampleStructureNegative(adjacency_structure_text,args.structure_negative_context_size)
+            ]
+        ] for _ in range(5)]
+)
 
-    iteration_start = time.time()
+contexts=np.concatenate(contexts_tot,axis=2)
+
+for epoch in range(args.n_epochs):
+
+    print("Starting epoch",epoch)
+
+    epoch_start = time.time()
 
     np.random.shuffle(order_imgs)
     np.random.shuffle(order_text)
 
-    contexts = [
-            [
-                graphs.sampleSemanticNeighborhoodSame(adjacency_semantic,same_semantic_context_size,idx_imgs),
-                graphs.sampleSemanticNeighborhoodOther(adjacency_semantic,other_semantic_context_size,idx_imgs),
-                graphs.sampleStructureNeighborhood(adjacency_structure_imgs,structure_context_size)
-            ],
-            [
-                graphs.sampleSemanticNeighborhoodSame(adjacency_semantic,same_semantic_context_size,idx_text),
-                graphs.sampleSemanticNeighborhoodOther(adjacency_semantic,other_semantic_context_size,idx_text),
-                graphs.sampleStructureNeighborhood(adjacency_structure_text,structure_context_size)
-            ],
-            [
-                graphs.sampleSemanticNegativeSame(adjacency_semantic,same_semantic_negative_context_size,idx_imgs),
-                graphs.sampleSemanticNegativeOther(adjacency_semantic,other_semantic_negative_context_size,idx_imgs),
-                graphs.sampleStructureNegative(adjacency_structure_imgs,structure_negative_context_size)
-            ],
-            [
-                graphs.sampleSemanticNegativeSame(adjacency_semantic,same_semantic_negative_context_size,idx_text),
-                graphs.sampleSemanticNegativeOther(adjacency_semantic,other_semantic_negative_context_size,idx_text),
-                graphs.sampleStructureNegative(adjacency_structure_text,structure_negative_context_size)
-            ]
-        ]
+    data_imgs_iter = data_imgs[order_imgs%len(data_imgs)]
+    data_text_iter = data_text[order_text%len(data_text)]
+    labels_imgs_iter = labels_imgs[order_imgs%len(data_imgs)]
+    labels_text_iter = labels_text[order_text%len(data_text)]
+
+    orders_cont =np.array(
+            [order_imgs,order_text]
+        )
+
+    contexts_iter = [[contexts[i,j][orders_cont[i%2]] for j in range(3)] for i in range(4)]
+
+
     recorded_losses =[]
     batch_start = time.time()
-    for batch in range(len(data_imgs)//batch_size):
+    for batch in range((len(data_imgs)*5)//args.batch_size):
 
 
         ### Build the dictionary fed as input to the network
 
         input_dict = {
-            imgs_placeholder:data_imgs[batch*batch_size:(batch+1)*batch_size],
-            text_placeholder:data_text[batch*batch_size:(batch+1)*batch_size],
-            imgs_labels_placeholder:labels_imgs[batch*batch_size:(batch+1)*batch_size],
-            text_labels_placeholder:labels_text[batch*batch_size:(batch+1)*batch_size]
+            imgs_placeholder:data_imgs_iter[batch*args.batch_size:(batch+1)*args.batch_size],
+            text_placeholder:data_text_iter[batch*args.batch_size:(batch+1)*args.batch_size],
+            imgs_labels_placeholder:labels_imgs_iter[batch*args.batch_size:(batch+1)*args.batch_size],
+            text_labels_placeholder:labels_text_iter[batch*args.batch_size:(batch+1)*args.batch_size]
         }
 
-        contexts_batch = [[np.concatenate(context[batch*batch_size:(batch+1)*batch_size]) for context in context_list] for context_list in contexts]
+        orders_batch =np.array(
+            [order_imgs,order_text]
+        )
+
+        contexts_batch = [[np.concatenate(contexts_iter[i][j][batch*args.batch_size:(batch+1)*args.batch_size]) for j in range(3)] for i in range(4)]
         data_context = [
             [data_imgs,data_text,data_imgs],
             [data_text,data_imgs,data_text],
@@ -269,7 +263,6 @@ for iteration in range(nb_iterations):
 
         batch_loss, _, _ = sess.run([loss,update_loss,weight_decay_op],feed_dict = input_dict)
 
-        
         recorded_losses.append(batch_loss)
         if batch % 50 == 0:
             save_path = saver.save(sess,"checkpoints/model.ckpt")

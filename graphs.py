@@ -1,5 +1,6 @@
 import numpy as np
-from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.metrics.pairwise import cosine_similarity, euclidean_distances
+
 
 def semanticGraph(data,labels):
 
@@ -15,10 +16,10 @@ def structureGraph(data,k=5):
     n=len(data)
     adjacency = np.zeros((n,n))
 
-    distances = [[np.linalg.norm(v1-v2) for v1 in data] for v2 in data]
+    distances = euclidean_distances(data,data)
 
     for i in range(n):
-        k_nearest_neighbors = np.argsort(distances[i])[1:k+1]
+        k_nearest_neighbors = np.argsort(distances[i,:],kind='heapsort')[1:k+1]
         for j in k_nearest_neighbors:
             adjacency[i,j] = 1
 #        adjacency[i,:] = [1 if j in k_nearest_neighbors else 0 for j in range(n)]

@@ -2,6 +2,7 @@ import scipy.io as sio
 import numpy as np
 import glob
 import pickle
+import natsort
 
 def load_text(path):
     raw_data = sio.loadmat(path)
@@ -13,9 +14,12 @@ def load_text(path):
     return text_data
 
 def load_labels(directory,n_samples,n_labels):
-    filenames =  glob.glob(directory+"/*_trainval.txt")
+    filenames =  np.sort(glob.glob(directory+"/*_trainval.txt"))
+
+    natsort_key = natsort.natsort_keygen()
+
     sample_names = {}
-    for i,filename in enumerate(glob.glob("VOCdevkit/VOC2007/JPEGImages/train/*")):
+    for i,filename in enumerate(np.sort(glob.glob("VOCdevkit/VOC2007/JPEGImages/train/*"))):
         sample_names.update({int(filename.split('/')[-1].split('.')[0]):i})
     labels = np.zeros((n_samples,n_labels))
     for i,filename in enumerate(filenames):
@@ -26,9 +30,9 @@ def load_labels(directory,n_samples,n_labels):
     return labels
 
 def load_labels_test(directory,n_samples,n_labels):
-    filenames =  glob.glob(directory+"/*_test.txt")
+    filenames =  np.sort(glob.glob(directory+"/*_test.txt"))
     sample_names = {}
-    for i,filename in enumerate(glob.glob("VOCTest/VOCdevkit/VOC2007/JPEGImages/*")):
+    for i,filename in enumerate(np.sort(glob.glob("VOCTest/VOCdevkit/VOC2007/JPEGImages/*"))):
         sample_names.update({int(filename.split('/')[-1].split('.')[0]):i})
     labels = np.zeros((n_samples,n_labels))
     for i,filename in enumerate(filenames):

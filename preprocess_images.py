@@ -21,9 +21,10 @@ data_transforms = transforms.Compose([
 ])
 
 model = torchvision.models.alexnet(pretrained=True)
-model.classifier=model.classifier[:5]
+model.classifier=model.classifier[:6]
+#model.fc = torch.nn.Dropout()
 model.eval()
-filenames = np.sort(glob.glob("VOCTest/VOCdevkit/VOC2007/JPEGImages/*.jpg"))
+filenames = np.sort(glob.glob("VOCdevkit/VOC2007/JPEGImages/train/*.jpg"))
 
 features = []
 for batch in range(len(filenames)//batch_size):
@@ -47,4 +48,4 @@ remaining_features = model(remaining_tensor).data.numpy()
 features.append(remaining_features)
 
 features=np.concatenate(features)
-pickle.dump(features,open("img_features_test.p",'wb'))
+pickle.dump(features,open("VOC_alexnet_feat.p",'wb'))
