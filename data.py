@@ -29,12 +29,26 @@ def load_labels(directory,n_samples,n_labels):
                 labels[sample_names[int(sample)],i]=1
     return labels
 
+def load_labels_flickr(directory):
+    filenames =  np.sort(glob.glob(directory+"/*.txt"))
+
+    n_labels = len(filenames)
+    train_labels=[]
+    test_labels=[]
+    for i,filename in enumerate(filenames):
+        raw_data = np.genfromtxt(filename).astype(np.int32)
+        for sample in raw_data:
+            labels[sample-1,i]=1
+    return labels
+
+
 def load_labels_test(directory,n_samples,n_labels):
     filenames =  np.sort(glob.glob(directory+"/*_test.txt"))
     sample_names = {}
     for i,filename in enumerate(np.sort(glob.glob("VOCTest/VOCdevkit/VOC2007/JPEGImages/*"))):
         sample_names.update({int(filename.split('/')[-1].split('.')[0]):i})
     labels = np.zeros((n_samples,n_labels))
+
     for i,filename in enumerate(filenames):
         raw_data = np.genfromtxt(filename)
         for sample, ground_truth in raw_data:

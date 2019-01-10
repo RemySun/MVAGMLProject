@@ -1,6 +1,7 @@
 import glob
 import numpy as np
 import natsort
+import pickle
 
 def get_tags(filename):
     file_stream = open(filename,'r')
@@ -30,8 +31,27 @@ for filename in filenames:
             else:
                 hits[tag]=1
 
-frequent_tags=[key for key,_ in sorted(hits.items(),key=lambda kv:kv[1])[-2000:]]
+frequent_tags=np.sort([key for key,_ in sorted(hits.items(),key=lambda kv:kv[1])[-2000:]])
 frequent_tag_frequency=[val for _,val in sorted(hits.items(),key=lambda kv:kv[1])[-2000:]]
 
+tag_dict = dict(zip(frequent_tags,[i for i in range(2000)]))
 
+train_tags = []
+test_tags = []
 
+for i,filename in enumerate(filenames[:25000]):
+    file_tags= np.zeros(2000,dtype=np.float32)
+    file_taglist = get_tags(filename)
+    for tag in file_taglist:
+        if tag in tag_dict:
+            file_tags[tag_dict[tag]]+=1.
+    if (i%5)<3:
+        train_tags.append(file_tags)
+    else:
+        test_tags.append(file_tags)
+
+train_tags=np.array(train_tags)
+test_tags=np.array(test_tags)
+
+pickle.dump(train_tags,open('FLICKR_train_tags.p','wb'))
+pickle.dump(test_tags,open('FLICKR_test_tags.p','wb'))

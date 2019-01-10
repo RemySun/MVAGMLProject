@@ -16,13 +16,18 @@ def getParsedArgs():
 
     parser.add_argument('--k_nearest',default=8,help='Numbers of nearest neighbors for structural graph construction.',type=int)
 
-    parser.add_argument('--n_epochs',default=8,help='Number of epochs for training on the generated dataset.',type=int)
+    parser.add_argument('--n_epochs',default=5,help='Number of epochs for training on the generated dataset.',type=int)
     parser.add_argument('--batch_size',default=5,help='Numbers of images and texts in batches used for mini batch training.',type=int)
     parser.add_argument('--starter_learning_rate',default=0.0001,help='Weight of the semantic graph loss.',type=float)
 
     parser.add_argument('--alpha_global',default=0.1,help='Weight of the global semantic loss.',type=float)
     parser.add_argument('--alpha_structure',default=0.1,help='Weight of the structural graph loss.',type=float)
     parser.add_argument('--alpha_semantic',default=1.,help='Weight of the semantic graph loss.',type=float)
+
+    parser.add_argument('--imgs_feat_path',default='VOC_alexnet_feat.p',help='path to image features.')
+    parser.add_argument('--imgs_feat_test_path',default='VOC_alexnet_feat_test.p',help='path to image features.')
+
+    parser.add_argument('--use_walks',default=False,help='path to image features.',type=bool)
 
     return parser.parse_args()
 
@@ -83,3 +88,38 @@ def medR(query_set,database_set,query_labels,database_labels,K):
     #return hits
 
     return np.median(hits)+1
+
+def comprehensiveEval(query_set,database_set,query_labels,database_labels):
+    similarities = cosine_similarity(query_set,database_set)
+
+    n=similarities.shape[0]
+
+    hits = np.zeros((n,n))
+
+    for i in range(n):
+        top_R_matches=np.argsort(-similarities[i,:])
+        for j,r in enumerate(top_R_matches):
+            if matchingLabels(query_labels[i],database_labels[r]):
+                hits[i,j] = 1
+
+    # Compute recall@K at key values
+    recalls = []
+    for K in ([1,5,10]):
+        recalls.append(np.mean(np.max(hits[:,:K],axis=1)))
+
+    # Compute median rank
+    medr = np.median(np.argmax((hits!=0),axis=1))
+    # Compute precision scope
+    precision_scopes = []
+    for scope in [200,500,1000,1500,2000,2500,3000,3500,4000,4500]:
+        precision_scopes.append(np.mean(hits[:,:scope]))
+
+    average_precisions = []
+    for i in range(len(similarities)):
+        precisions =[]
+        for r in range(n):
+            if hits[i,r]:
+                precisions.append(np.mean(hits[i,:r+1]))
+        average_precisions.append(np.mean(precisions))
+
+    return recalls, medr, precision_scopes, np.mean(average_precisions)

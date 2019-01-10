@@ -26,14 +26,17 @@ learning_rate = tf.train.exponential_decay(args.starter_learning_rate, global_st
 print('Loading processed data...')
 start = time.time()
 
-data_imgs = data.load_imgs('VOC_alexnet_feat.p')
+data_imgs = data.load_imgs(args.imgs_feat_path)
 data_text = np.array(data.load_text('pascal/train.mat'))
 labels_text = labels_imgs = data.load_labels('VOCdevkit/VOC2007/ImageSets/Main',5011,20)
 
 valid_idx = (np.sum(data_text,axis=1) != np.zeros(data_text.shape[0]))
 
-data_imgs=preprocessing.scale(data_imgs[valid_idx])
-data_text=preprocessing.scale(data_text[valid_idx])
+imgs_scaler = preprocessing.StandardScaler()
+text_scaler = preprocessing.StandardScaler()
+
+data_imgs=imgs_scaler.fit_transform(data_imgs[valid_idx])
+data_text=text_scaler.fit_transform(data_text[valid_idx])
 labels_text=labels_imgs=labels_text[valid_idx]
 
 IMG_SIZE = len(data_imgs[0])
@@ -52,7 +55,6 @@ start = time.time()
 adjacency_semantic = graphs.semanticGraph(data, labels)
 
 adjacency_structure_imgs = graphs.structureGraph(data_imgs, k=args.k_nearest)
-
 adjacency_structure_text = graphs.structureGraph(data_text, k=args.k_nearest)
 
 print("Finished building data graphs, it took ", time.time()-start)
@@ -184,30 +186,58 @@ print("Starting training...")
 order_imgs = np.array([i for i in range(len(data_imgs)*5)])
 order_text = np.array([i for i in range(len(data_text)*5)])
 
+print('Sampling neighborhoods')
+start=time.time()
+if args.use_walks:
+    contexts_tot = np.array([[
+        [
+            graphs.sampleSemanticWalkSame(adjacency_semantic,args.same_semantic_context_size,idx_imgs),
+            graphs.sampleSemanticWalkOther(adjacency_semantic,args.other_semantic_context_size,idx_imgs),
+            graphs.sampleStructureWalk(adjacency_structure_imgs,args.structure_context_size)
+        ],
+        [
+            graphs.sampleSemanticWalkSame(adjacency_semantic,args.same_semantic_context_size,idx_text),
+            graphs.sampleSemanticWalkOther(adjacency_semantic,args.other_semantic_context_size,idx_text),
+            graphs.sampleStructureWalk(adjacency_structure_text,args.structure_context_size)
+        ],
+        [
+            graphs.sampleSemanticNegativeSame(adjacency_semantic,args.same_semantic_negative_context_size,idx_imgs),
+            graphs.sampleSemanticNegativeOther(adjacency_semantic,args.other_semantic_negative_context_size,idx_imgs),
+            graphs.sampleStructureNegative(adjacency_structure_imgs,args.structure_negative_context_size)
+        ],
+        [
+            graphs.sampleSemanticNegativeSame(adjacency_semantic,args.same_semantic_negative_context_size,idx_text),
+            graphs.sampleSemanticNegativeOther(adjacency_semantic,args.other_semantic_negative_context_size,idx_text),
+            graphs.sampleStructureNegative(adjacency_structure_text,args.structure_negative_context_size)
+        ]
+    ] for _ in range(5)]
+    )
+else:
+    contexts_tot = np.array([[
+        [
+            graphs.sampleSemanticNeighborhoodSame(adjacency_semantic,args.same_semantic_context_size,idx_imgs),
+            graphs.sampleSemanticNeighborhoodOther(adjacency_semantic,args.other_semantic_context_size,idx_imgs),
+            graphs.sampleStructureNeighborhood(adjacency_structure_imgs,args.structure_context_size)
+        ],
+        [
+            graphs.sampleSemanticNeighborhoodSame(adjacency_semantic,args.same_semantic_context_size,idx_text),
+            graphs.sampleSemanticNeighborhoodOther(adjacency_semantic,args.other_semantic_context_size,idx_text),
+            graphs.sampleStructureNeighborhood(adjacency_structure_text,args.structure_context_size)
+        ],
+        [
+            graphs.sampleSemanticNegativeSame(adjacency_semantic,args.same_semantic_negative_context_size,idx_imgs),
+            graphs.sampleSemanticNegativeOther(adjacency_semantic,args.other_semantic_negative_context_size,idx_imgs),
+            graphs.sampleStructureNegative(adjacency_structure_imgs,args.structure_negative_context_size)
+        ],
+        [
+            graphs.sampleSemanticNegativeSame(adjacency_semantic,args.same_semantic_negative_context_size,idx_text),
+            graphs.sampleSemanticNegativeOther(adjacency_semantic,args.other_semantic_negative_context_size,idx_text),
+            graphs.sampleStructureNegative(adjacency_structure_text,args.structure_negative_context_size)
+        ]
+    ] for _ in range(5)]
+    )
 
-contexts_tot = np.array([[
-            [
-                graphs.sampleSemanticNeighborhoodSame(adjacency_semantic,args.same_semantic_context_size,idx_imgs),
-                graphs.sampleSemanticNeighborhoodOther(adjacency_semantic,args.other_semantic_context_size,idx_imgs),
-                graphs.sampleStructureNeighborhood(adjacency_structure_imgs,args.structure_context_size)
-            ],
-            [
-                graphs.sampleSemanticNeighborhoodSame(adjacency_semantic,args.same_semantic_context_size,idx_text),
-                graphs.sampleSemanticNeighborhoodOther(adjacency_semantic,args.other_semantic_context_size,idx_text),
-                graphs.sampleStructureNeighborhood(adjacency_structure_text,args.structure_context_size)
-            ],
-            [
-                graphs.sampleSemanticNegativeSame(adjacency_semantic,args.same_semantic_negative_context_size,idx_imgs),
-                graphs.sampleSemanticNegativeOther(adjacency_semantic,args.other_semantic_negative_context_size,idx_imgs),
-                graphs.sampleStructureNegative(adjacency_structure_imgs,args.structure_negative_context_size)
-            ],
-            [
-                graphs.sampleSemanticNegativeSame(adjacency_semantic,args.same_semantic_negative_context_size,idx_text),
-                graphs.sampleSemanticNegativeOther(adjacency_semantic,args.other_semantic_negative_context_size,idx_text),
-                graphs.sampleStructureNegative(adjacency_structure_text,args.structure_negative_context_size)
-            ]
-        ] for _ in range(5)]
-)
+print('Finished sampling neighborhoods, it took',time.time()-start)
 
 contexts=np.concatenate(contexts_tot,axis=2)
 

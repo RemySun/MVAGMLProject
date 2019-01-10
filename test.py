@@ -7,7 +7,8 @@ import utils
 import time
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn import preprocessing
-
+import scipy.io as sio
+import glob
 args = utils.getParsedArgs()
 
 ########################################
@@ -21,19 +22,28 @@ print('new and improved testing')
 print('Loading processed data...')
 start = time.time()
 
-data_imgs = data.load_imgs('VOC_alexnet_feat_test.p')
-data_text = np.array(data.load_text('pascal/test.mat'))
-labels_text = labels_imgs = data.load_labels_test('VOCTest/VOCdevkit/VOC2007/ImageSets/Main',4952,20)
-
-# data_imgs = data.load_imgs('img_features.p')
-# data_text = np.array(data.load_text('pascal/train.mat'))
-# labels_text = labels_imgs = data.load_labels('VOCdevkit/VOC2007/ImageSets/Main',5011,20)
-
+data_imgs = data.load_imgs(args.imgs_feat_path)
+data_text = np.array(data.load_text('pascal/train.mat'))
 
 valid_idx = (np.sum(data_text,axis=1) != np.zeros(data_text.shape[0]))
 
-data_imgs=preprocessing.scale(data_imgs[valid_idx])
-data_text=preprocessing.scale(data_text[valid_idx])
+imgs_scaler = preprocessing.StandardScaler()
+text_scaler = preprocessing.StandardScaler()
+
+data_imgs=imgs_scaler.fit_transform(data_imgs[valid_idx])
+data_text=text_scaler.fit_transform(data_text[valid_idx])
+
+data_imgs = data.load_imgs(args.imgs_feat_test_path)
+data_text = np.array(data.load_text('pascal/test.mat'))
+labels_text = labels_imgs = data.load_labels_test('VOCTest/VOCdevkit/VOC2007/ImageSets/Main',4952,20)
+
+valid_idx = (np.sum(data_text,axis=1) != np.zeros(data_text.shape[0]))
+
+vanilla_text = data_text[valid_idx]
+vanilla_imgs = data_imgs[valid_idx]
+
+data_imgs=imgs_scaler.transform(data_imgs[valid_idx])
+data_text=text_scaler.transform(data_text[valid_idx])
 labels_text=labels_imgs=labels_text[valid_idx]
 
 IMG_SIZE = len(data_imgs[0])
@@ -68,39 +78,52 @@ saver.restore(sess,"checkpoints/model.ckpt")
 
 imgs_latent, text_latent = sess.run([imgs_encoded,text_encoded],feed_dict={imgs_placeholder:data_imgs,text_placeholder:data_text})
 
-similarities = cosine_similarity(imgs_latent,text_latent)
+# sample_names = {}
+# for i,filename in enumerate(np.sort(glob.glob("VOCdevkit/VOC2007/JPEGImages/train/*"))):
+#     sample_names.update({i:int(filename.split('/')[-1].split('.')[0])})
 
-# hits = 0
-# K = 200
-# for i in range(len(similarities)):
-#     top_K_matches=np.argsort(-similarities[i,:])[:K]
-#     for k in top_K_matches:
-#         if len([True for label1,label2 in zip(labels_imgs[i],labels_text[k]) if (label1) and (label2)]):
-#             hits += 1
 
-# precision_it = hits/(len(similarities)*K)
+voc=sio.loadmat('pascal/voc')
 
-# similarities = cosine_similarity(text_latent,imgs_latent)
+voc = dict(zip([i for i in range(399)],[voc['voc'][i][0][0] for i in range(399)]))
 
-# hits = 0
-# K = 200
-# for i in range(len(similarities)):
-#     top_K_matches=np.argsort(-similarities[i,:])[:K]
-#     for k in top_K_matches:
-#         if len([True for label1,label2 in zip(labels_text[i],labels_imgs[k]) if (label1) and (label2)]):
-#             hits += 1
+sim_imgs_text = cosine_similarity(imgs_latent,text_latent)
+sim_text_imgs = cosine_similarity(text_latent,imgs_latent)
 
-# precision_ti = hits/(len(similarities)*K)
+text_hits = np.argsort(sim_imgs_text[0,:])[:3]
+imgs_hits = np.argsort(sim_text_imgs[0,:])[:3]
 
-#hits_mat =(utils.meanAveragePrecision(imgs_latent,text_latent,labels_imgs,labels_text,200))
-print(utils.meanAveragePrecision(imgs_latent,text_latent,labels_imgs,labels_text,len(imgs_latent)))
-print(utils.meanAveragePrecision(text_latent,imgs_latent,labels_text,labels_imgs,len(imgs_latent)))
+for text_hit in text_hits:
+    print('one_hit')
+    for i,tag in enumerate(vanilla_text[text_hit]):
+        if tag !=0:
+            print(voc[i])
 
-for k in [1,5,10]:
-    print('Recall at',k)
-    print(utils.recallAtK(imgs_latent,text_latent,labels_imgs,labels_text,k))
-    print(utils.recallAtK(text_latent,imgs_latent,labels_text,labels_imgs,k))
+print('text_query')
+for i,tag in enumerate(vanilla_text[0]):
+    if tag !=0:
+        print(voc[i])
+img_names = np.sort(glob.glob('VOCTest/VOCdevkit/VOC2007/JPEGImages/*.jpg'))[valid_idx]
 
-print('median rank is')
-print(utils.medR(text_latent,imgs_latent,labels_text,labels_imgs,500))
+for img_hit in imgs_hits:
+    print('one_hit')
+    for i in (img_names[img_hit]):
+        print(i)
+
+
+# print(utils.meanAveragePrecision(imgs_latent,text_latent,labels_imgs,labels_text,len(imgs_latent)))
+# print(utils.meanAveragePrecision(text_latent,imgs_latent,labels_text,labels_imgs,len(imgs_latent)))
+
+# for k in [1,5,10]:
+#     print('Recall at',k)
+#     print(utils.recallAtK(imgs_latent,text_latent,labels_imgs,labels_text,k))
+#     print(utils.recallAtK(text_latent,imgs_latent,labels_text,labels_imgs,k))
+
+# print('median rank is')
+# print(utils.medR(text_latent,imgs_latent,labels_text,labels_imgs,500))
+
+# print('Image to text')
+# print(utils.comprehensiveEval(imgs_latent,text_latent,labels_imgs,labels_text))
+# print('Text to image')
+# print(utils.comprehensiveEval(text_latent,imgs_latent,labels_text,labels_imgs))
 

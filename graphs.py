@@ -94,3 +94,62 @@ def sampleSemanticNegativeSame(adjacency,k,indexes_sample):
 def sampleSemanticNegativeOther(adjacency,k,indexes_sample):
     indexes_neighbors = [i for i in range(len(adjacency)) if i not in indexes_sample]
     return sampleSemanticNegative(adjacency,k,indexes_sample,indexes_neighbors)
+
+def walkBias(adjacency,origin,destination,p=10):
+    n=len(adjacency)
+    if origin == destination:
+        return 1/2
+    if adjacency[origin,destination]!=0.:
+        return 1
+    return 1/p
+
+def secondOrderBias(adjacency,origin,destination,p=2,q=4):
+    if origin==destination:
+        return 1/p
+    if adjacency[origin,destination]!=0.:
+        return 1
+    return 1/q
+
+def sampleStructureWalk(adjacency,k):
+    n = len(adjacency)
+    neighbors = []
+    vertices = [i for i in range(n)]
+    for i in range(n):
+        current_node = i
+        neighborhood=[]
+        for _ in range(k):
+            multinomial = np.array([adjacency[current_node,j] if adjacency[current_node,j]== 0. else secondOrderBias(adjacency,current_node,j)*adjacency[current_node,j] for j in range(n)])
+            multinomial = multinomial/np.sum(multinomial)
+            current_node=np.random.choice(vertices,p=multinomial)
+            neighborhood.append(current_node)
+
+        neighbors.append(neighborhood)
+
+    return neighbors
+
+def sampleSemanticWalk(adjacency,k,indexes_sample,indexes_neighbors):
+    adjacency = adjacency[indexes_sample,:][:,indexes_neighbors]
+    n = len(adjacency)
+    neighbors = []
+    vertices = [i for i in range(n)]
+    for i in range(n):
+        current_node = i
+        neighborhood=[]
+        for _ in range(k):
+            multinomial = np.array([adjacency[current_node,j] if adjacency[current_node,j]==0. else walkBias(adjacency,i,j)*adjacency[current_node,j] for j in range(n)])
+            multinomial = multinomial/np.sum(multinomial)
+            current_node=np.random.choice(vertices,p=multinomial)
+            neighborhood.append(current_node)
+
+        neighbors.append(neighborhood)
+
+    return neighbors
+
+def sampleSemanticWalkSame(adjacency,k,indexes_sample):
+    indexes_neighbors = [i for i in range(len(adjacency)) if i in indexes_sample]
+    return sampleSemanticWalk(adjacency,k,indexes_sample,indexes_neighbors)
+
+
+def sampleSemanticWalkOther(adjacency,k,indexes_sample):
+    indexes_neighbors = [i for i in range(len(adjacency)) if i not in indexes_sample]
+    return sampleSemanticWalk(adjacency,k,indexes_sample,indexes_neighbors)
