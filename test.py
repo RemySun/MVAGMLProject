@@ -87,43 +87,43 @@ voc=sio.loadmat('pascal/voc')
 
 voc = dict(zip([i for i in range(399)],[voc['voc'][i][0][0] for i in range(399)]))
 
-sim_imgs_text = cosine_similarity(imgs_latent,text_latent)
-sim_text_imgs = cosine_similarity(text_latent,imgs_latent)
+# sim_imgs_text = cosine_similarity(imgs_latent,text_latent)
+# sim_text_imgs = cosine_similarity(text_latent,imgs_latent)
 
-text_hits = np.argsort(sim_imgs_text[0,:])[:3]
-imgs_hits = np.argsort(sim_text_imgs[0,:])[:3]
+# text_hits = np.argsort(sim_imgs_text[0,:])[:3]
+# imgs_hits = np.argsort(sim_text_imgs[0,:])[:3]
 
-for text_hit in text_hits:
-    print('one_hit')
-    for i,tag in enumerate(vanilla_text[text_hit]):
-        if tag !=0:
-            print(voc[i])
+# for text_hit in text_hits:
+#     print('one_hit')
+#     for i,tag in enumerate(vanilla_text[text_hit]):
+#         if tag !=0:
+#             print(voc[i])
 
-print('text_query')
-for i,tag in enumerate(vanilla_text[0]):
-    if tag !=0:
-        print(voc[i])
-img_names = np.sort(glob.glob('VOCTest/VOCdevkit/VOC2007/JPEGImages/*.jpg'))[valid_idx]
+# print('text_query')
+# for i,tag in enumerate(vanilla_text[0]):
+#     if tag !=0:
+#         print(voc[i])
+# img_names = np.sort(glob.glob('VOCTest/VOCdevkit/VOC2007/JPEGImages/*.jpg'))[valid_idx]
 
-for img_hit in imgs_hits:
-    print('one_hit')
-    for i in (img_names[img_hit]):
-        print(i)
+# for img_hit in imgs_hits:
+#     print('one_hit')
+#     for i in (img_names[img_hit]):
+#         print(i)
 
 
-# print(utils.meanAveragePrecision(imgs_latent,text_latent,labels_imgs,labels_text,len(imgs_latent)))
-# print(utils.meanAveragePrecision(text_latent,imgs_latent,labels_text,labels_imgs,len(imgs_latent)))
+print(utils.meanAveragePrecision(imgs_latent,text_latent,labels_imgs,labels_text,len(imgs_latent)))
+print(utils.meanAveragePrecision(text_latent,imgs_latent,labels_text,labels_imgs,len(imgs_latent)))
 
-# for k in [1,5,10]:
-#     print('Recall at',k)
-#     print(utils.recallAtK(imgs_latent,text_latent,labels_imgs,labels_text,k))
-#     print(utils.recallAtK(text_latent,imgs_latent,labels_text,labels_imgs,k))
+for k in [1,5,10]:
+    print('Recall at',k)
+    print(utils.recallAtK(imgs_latent,text_latent,labels_imgs,labels_text,k))
+    print(utils.recallAtK(text_latent,imgs_latent,labels_text,labels_imgs,k))
 
-# print('median rank is')
-# print(utils.medR(text_latent,imgs_latent,labels_text,labels_imgs,500))
+print('median rank is')
+print(utils.medR(text_latent,imgs_latent,labels_text,labels_imgs,500))
 
-# print('Image to text')
-# print(utils.comprehensiveEval(imgs_latent,text_latent,labels_imgs,labels_text))
-# print('Text to image')
-# print(utils.comprehensiveEval(text_latent,imgs_latent,labels_text,labels_imgs))
+print('Image to text')
+print(utils.comprehensiveEval(imgs_latent,text_latent,labels_imgs,labels_text))
+print('Text to image')
+print(utils.comprehensiveEval(text_latent,imgs_latent,labels_text,labels_imgs))
 
